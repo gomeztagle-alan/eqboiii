@@ -13,13 +13,27 @@ U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 17, /* dc=*/ 20, 
 
 byte audio_bar_height[7]; // sizes for the individual bars
 
+  // 
+  const int analogPin = 26; // Use GP26 (ADC0)
+  int sensorValue = 0;
 
 
 void setup() {
+  // Initialize serial communication at 115200 baud rate
+  Serial.begin(115200); 
   // 1. Initialize SPI pins for Pico (Optional but recommended for clarity)
   // Default SPI0: SCK=18, MOSI=19
   SPI.setSCK(18);
   SPI.setTX(19); 
+  // Setup PWM @ 2.3K
+  pinMode(27, OUTPUT);
+  tone(27, 2300);
+
+  // Setup Relay signal (depricated)
+  pinMode(28, OUTPUT);
+
+
+
   // 2. Start the display
   u8g2.begin();
   u8g2.setColorIndex(1);
@@ -35,8 +49,19 @@ void setup() {
 }
 
 void loop() {
-  u8g2.clearBuffer();
+  // Read the value from the analog pin
+  sensorValue = analogRead(analogPin); 
 
+  // Print the value to the Serial Monitor
+  Serial.print("Analog Value: ");
+  Serial.println(sensorValue);
+
+
+  u8g2.clearBuffer();
+  digitalWrite(28, LOW); 
+
+  // Map 150-600 to graphs
+  map(value, fromLow, fromHigh, toLow, toHigh)
   for (int i=0; i<7; i++) { // loop for every fraquency (63Hz, 160Hz, 400Hz, 1kHz, 2.5kHz, 6.25kHz and 16kHz)
 
     int random_value = random(1024); // calculate random value between 0-1024
@@ -47,14 +72,7 @@ void loop() {
   }					
   
   // Set font and draw text
-  u8g2.setFont(u8g2_font_ncenB14_tr);	
-  u8g2.drawStr(  2, 64, "63"); 
-  u8g2.drawStr( 19, 64, "160"); 
-  u8g2.drawStr( 37, 64, "400"); 
-  u8g2.drawStr( 60, 64, "1K"); 
-  u8g2.drawStr( 75, 64, "2.5K"); 
-  u8g2.drawStr( 95, 64, "6.3K"); 
-  u8g2.drawStr(115, 64, "16K");        
+  u8g2.setFont(u8g2_font_ncenB14_tr);	   
   u8g2.sendBuffer();					
   
   delay(5000);
