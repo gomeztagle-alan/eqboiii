@@ -1,79 +1,52 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
+#include <math.h> // Required for exp()
 
-/*
- * SSD1309 Constructor for 4-wire Hardware SPI
- * F = Full Framebuffer
- * 4W = 4-wire SPI
- * HW_SPI = Hardware SPI
- * Pins: (rotation, cs, dc, [reset])
- */
-U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 17, /* dc=*/ 20, /* reset=*/ 21);
+U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI u8g2(U8G2_R0, 17, 20, 21);
 
-byte audio_bar_height[7]; // sizes for the individual bars
-
-  // 
-  const int analogPin = 26; // Use GP26 (ADC0)
-  int sensorValue = 0;
-
+float audio_bar_height[7]; 
+const int ANALOG_PIN = 26; // Using GP26 (ADC0)
+const float SIGMA = 1.2;    // Adjust this to make the "bell" wider or thinner
 
 void setup() {
-  // Initialize serial communication at 115200 baud rate
-  Serial.begin(115200); 
-  // 1. Initialize SPI pins for Pico (Optional but recommended for clarity)
-  // Default SPI0: SCK=18, MOSI=19
-  SPI.setSCK(18);
-  SPI.setTX(19); 
+  u8g2.begin();
+  analogReadResolution(10); // Match your 0-1024 logic
   // Setup PWM @ 2.3K
   pinMode(27, OUTPUT);
   tone(27, 2300);
 
   // Setup Relay signal (depricated)
   pinMode(28, OUTPUT);
-
-
-
-  // 2. Start the display
-  u8g2.begin();
-  u8g2.setColorIndex(1);
-  u8g2.setBitmapMode(1);
-
-  audio_bar_height[0]=16;
-  audio_bar_height[1]=16;
-  audio_bar_height[2]=16;
-  audio_bar_height[3]=16;
-  audio_bar_height[4]=16;
-  audio_bar_height[5]=16;
-  audio_bar_height[6]=16;
 }
 
 void loop() {
-  // Read the value from the analog pin
-  sensorValue = analogRead(analogPin); 
-
-  // Print the value to the Serial Monitor
-  Serial.print("Analog Value: ");
-  Serial.println(sensorValue);
-
-
   u8g2.clearBuffer();
-  digitalWrite(28, LOW); 
-
-  // Map 150-600 to graphs
-  map(value, fromLow, fromHigh, toLow, toHigh)
-  for (int i=0; i<7; i++) { // loop for every fraquency (63Hz, 160Hz, 400Hz, 1kHz, 2.5kHz, 6.25kHz and 16kHz)
-
-    int random_value = random(1024); // calculate random value between 0-1024
-    audio_bar_height[i] = audio_bar_height[i] + ((map(random_value, 0, 1024, 0, 53) - audio_bar_height[i]) / 4.0); // update the bar with a new value (slowly)
-
-
-    u8g2.drawBox(2 + i*19, 53-audio_bar_height[i], 10, audio_bar_height[i]); // draw bar
-  }					
   
-  // Set font and draw text
-  u8g2.setFont(u8g2_font_ncenB14_tr);	   
-  u8g2.sendBuffer();					
+  // 1. Read the analog value
+  int rawInput = analogRead(ANALOG_PIN); 
+
+  // 2. Map the input to define the CENTER (mu) of the curve across the 7 bars
+  // This makes the "hump" move left to right based on the knob/sensor
+  float mu = map(rawInput, 0, 1024, 0, 600) / 100.0; 
   
-  delay(5000);
+  // 3. Define the max height (Amplitude)
+  float amplitude = 50.0; 
+
+  for (int i = 0; i < 7; i++) {
+    // 4. Calculate the Gaussian target for this specific bar
+    float exponent = -pow((i - mu), 2) / (2 * pow(SIGMA, 2));
+    float targetHeight = amplitude * exp(exponent);
+
+    // 5. Smooth transition (Your original logic)
+    // We use a small factor (0.2) to keep the movement "silky"
+    audio_bar_height[i] = audio_bar_height[i] + ((targetHeight - audio_bar_height[i]) * 0.2);
+
+    // 6. Draw the bar
+    u8g2.drawBox(2 + i * 19, 63 - (int)audio_bar_height[i], 10, (int)audio_bar_height[i]);
+  }
+
+  u8g2.sendBuffer();
+  // Removed the 5-second delay so the animation is actually visible!
+  delay(10); 
 }
